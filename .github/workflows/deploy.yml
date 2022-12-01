@@ -1,0 +1,29 @@
+name: Maven Package
+
+on:
+  push:
+    tags: v*.*
+
+jobs:
+  build:
+    if: github.repository == 'braginxv/netgym-kotlin' && github.actor == 'braginxv'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: adopt
+          java-version: 8
+
+      - name: Setup SBT
+        env:
+          SONATYPE_USERNAME: 'braginxv'
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          PGP_SECRET: ${{ secrets.KEYSTORE }}
+          PGP_PASSPHRASE: ${{ secrets.PRIVATE_KEY_PASSPHRASE }}
+
+        run: |
+          sbt publishSigned
+
