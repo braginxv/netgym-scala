@@ -55,20 +55,15 @@ homepage := Some(url("https://github.com/braginxv/netgym-scala"))
 
 pomIncludeRepository := { _ => false }
 
-publishTo := {
-  val nexus = "https://s01.oss.sonatype.org/"
-  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
-  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
+import xerial.sbt.Sonatype._
+sonatypeProjectHosting := Some(GitHubHosting("braginxv", "netgym-scala",
+  "Facilities for developing with Netgym network library in Scala", "uncloudedvm@gmail.com"))
+sonatypeCredentialHost := "s01.oss.sonatype.org"
+sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
+
+publishTo := sonatypePublishToBundle.value
 
 publishMavenStyle := true
-credentials += Credentials(
-  "Sonatype Nexus Repository Manager",
-  "s01.oss.sonatype.org",
-  sys.env("SONATYPE_USERNAME"),
-  sys.env("SONATYPE_PASSWORD")
-)
-
 
 addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full)
 
