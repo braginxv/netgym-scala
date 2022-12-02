@@ -35,11 +35,12 @@ For instance, let's say you need to download a set of images from a remote serve
         .iterable(imagePaths)
         .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
         .through(httpClient.acquire)
+        .through(NetgymHttpClient.toByteResponses)
 
-      (fileName, httpResponse) = response
+      (fileName, content) = response
 
       _ <- Stream
-        .chunk(Chunk.array(httpResponse.content))
+        .chunk(Chunk.array(content))
         .through(Files[IO].writeAll(Path(s"$outputDirectory/$fileName")))
     } yield ()
 
@@ -71,11 +72,12 @@ val program: Stream[Task, Unit] = for {
     .iterable(imagePaths)
     .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
     .through(httpClient.acquire)
+    .through(NetgymHttpClient.toByteResponses)
 
-  (fileName, httpResponse) = response
+  (fileName, content) = response
 
   _ <- Stream
-    .chunk(fs2.Chunk.array(httpResponse.content))
+    .chunk(fs2.Chunk.array(content))
     .through(Files[Task].writeAll(Path(s"$outputDirectory/$fileName")))
 } yield ()
 
@@ -87,11 +89,11 @@ program.compile.drain
 There are other convertors allowing you to get http responses in a more appropriate form you may need
 
 ```scala
-def toByteResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])]
+NetgymHttpClient.toByteResponses[F, KeyType] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, Array[Byte])]
 
-def toStringResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, String)]
+NetgymHttpClient.toStringResponses[F, KeyType] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, String)]
 
-def toJsonResponses[F[_] : ApplicativeError[*[_], Throwable], K]: Pipe[F, (K, HttpResponse), (K, Json)]
+NetgymHttpClient.toJsonResponses[F, KeyType] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, Json)]
 
-def toObjectResponses[F[_] : ApplicativeError[*[_], Throwable], K, T: Decoder]: Pipe[F, (K, HttpResponse), (K, T)]
+NetgymHttpClient.toObjectResponses[F, KeyType, T] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, T)]
 ```
