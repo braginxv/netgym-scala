@@ -29,7 +29,7 @@ import cats.syntax.either._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.monadError._
-import cats.{ FlatMap, Functor, MonadError }
+import cats.{ ApplicativeError, FlatMap, Functor, MonadError }
 import fs2._
 import io.circe
 import io.circe.parser._
@@ -91,29 +91,13 @@ class NetgymHttpClient[F[_] : Async : FlatMap](
     } yield response
   }
 
-  def acquire[K]: Pipe[F, (K, HttpRequest), (K, HttpResponse)] = {
-    inbox =>
-      inbox.evalMap { case (key, request) =>
-        acquire(request).map(key -> _)
-      }
-  }
-
-  def toByteResponses[K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])] =
-    _.map { case (key, response) => key -> response.content }
-
-  def toStringResponses[K]: Pipe[F, (K, HttpResponse), (K, String)] =
-    _.map { case (key, response) => key -> response.asString }
-
-  def toJsonResponses[K]: Pipe[F, (K, HttpResponse), (K, Json)] = _
-    .map { case (key, response) => response.asJson.map(key -> _) }
-    .rethrow
-
-  def toObjectResponses[K, T: Decoder]: Pipe[F, (K, HttpResponse), (K, T)] = _
-    .map { case (key, response) => response.asObject[T].map(key -> _) }
-    .rethrow
+  def acquire[K]: Pipe[F, (K, HttpRequest), (K, HttpResponse)] =
+    _.evalMap { case (key, request) =>
+      acquire(request).map(key -> _)
+    }
 
   protected[scala] def fromBaseUrl(baseUrl: URL): HttpConnection = {
-    val port = Some(baseUrl.getPort).getOrElse(baseUrl.getDefaultPort)
+    val port = Some(baseUrl.getPort).filter(_ > 0).getOrElse(baseUrl.getDefaultPort)
 
     val sslKeyManagers = if (clientKeyManagers.isEmpty) null else clientKeyManagers.toArray
     val sslTrustManagers = if (trustManagers.isEmpty) null else trustManagers.toArray
@@ -138,6 +122,20 @@ object NetgymHttpClient {
   final val AGENT_HEADER: String = "User-Agent"
   final val AGENT_CLIENT: String = "Netgym network library (https://github.com/braginxv/netgym)"
 
+  def toByteResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])] =
+    _.map { case (key, response) => key -> response.content }
+
+  def toStringResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, String)] =
+    _.map { case (key, response) => key -> response.asString }
+
+  def toJsonResponses[F[_] : ApplicativeError[*[_], Throwable], K]: Pipe[F, (K, HttpResponse), (K, Json)] = _
+    .map { case (key, response) => response.asJson.map(key -> _) }
+    .rethrow
+
+  def toObjectResponses[F[_] : ApplicativeError[*[_], Throwable], K, T: Decoder]: Pipe[F, (K, HttpResponse), (K, T)] = _
+    .map { case (key, response) => response.asObject[T].map(key -> _) }
+    .rethrow
+
   implicit class ResponseConversions(response: HttpResponse) {
     def asString: String =
       new String(response.content, response.charset.getOrElse(StandardCharsets.UTF_8))
@@ -147,11 +145,12 @@ object NetgymHttpClient {
     def asObject[T: Decoder]: Either[circe.Error, T] = asJson.flatMap(_.as[T])
   }
 
-  implicit class ResponseConversionsF[F[_]: Functor: MonadError[*[_], Throwable]](response: F[HttpResponse]) {
+  implicit class ResponseConversionsF[F[_] : Functor : MonadError[*[_], Throwable]](response: F[HttpResponse]) {
     def asString: F[String] = response.map(_.asString)
 
     def asJson: F[Json] = response.map(_.asJson).rethrow
 
     def asObject[T: Decoder]: F[T] = response.map(_.asObject[T]).rethrow
   }
+
 }
