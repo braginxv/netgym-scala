@@ -91,9 +91,9 @@ class NetgymHttpClient[F[_] : Async : FlatMap](
     } yield response
   }
 
-  def acquire[K]: Pipe[F, (K, HttpRequest), (K, HttpResponse)] =
-    _.evalMap { case (key, request) =>
-      acquire(request).map(key -> _)
+  def acquire[K]: Pipe[F, (K, HttpRequest), (K, HttpResponse)] = _
+    .mapAsyncUnordered(Runtime.getRuntime.availableProcessors() * 2) {
+      case (key, request) => acquire(request).map(key -> _)
     }
 
   protected[scala] def fromBaseUrl(baseUrl: URL): HttpConnection = {
@@ -122,11 +122,11 @@ object NetgymHttpClient {
   final val AGENT_HEADER: String = "User-Agent"
   final val AGENT_CLIENT: String = "Netgym network library (https://github.com/braginxv/netgym)"
 
-  def toByteResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])] =
-    _.map { case (key, response) => key -> response.content }
+  def toByteResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])] = _
+    .map { case (key, response) => key -> response.content }
 
-  def toStringResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, String)] =
-    _.map { case (key, response) => key -> response.asString }
+  def toStringResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, String)] = _
+    .map { case (key, response) => key -> response.asString }
 
   def toJsonResponses[F[_] : ApplicativeError[*[_], Throwable], K]: Pipe[F, (K, HttpResponse), (K, Json)] = _
     .map { case (key, response) => response.asJson.map(key -> _) }
