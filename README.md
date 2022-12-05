@@ -95,5 +95,5 @@ NetgymHttpClient.toStringResponses[F, KeyType] // returns Pipe[F, (KeyType, Http
 
 NetgymHttpClient.toJsonResponses[F, KeyType] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, Json)]
 
-NetgymHttpClient.toObjectResponses[F, KeyType, T] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, T)]
+NetgymHttpClient.toObjectResponses[F, KeyType, T](implicit decoder: io.circe.Decoder[T]) // returns Pipe[F, (KeyType, HttpResponse), (KeyType, T)]
 ```

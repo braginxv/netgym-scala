@@ -24,6 +24,7 @@
 
 package org.techlook.net.client.scala
 
+import io.circe.Json
 import org.techlook.net.client.http.client.HttpListener
 import org.techlook.net.client.http.{ FormRequestData, HttpConnection }
 import org.techlook.net.client.scala.utils.NetgymUtils
@@ -39,6 +40,7 @@ object HttpRequest {
     body match {
       case buffer: Array[Byte] => buffer
       case content: String => content.getBytes(charset)
+      case json: Json => json.noSpaces.getBytes(charset)
       case other => other.toString.getBytes(charset)
     }
   }
