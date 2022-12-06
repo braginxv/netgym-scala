@@ -69,7 +69,7 @@ class NetgymHttpClient[F[_] : Async : FlatMap](
             response.left().apply(errorMessage => callback(new RuntimeException(errorMessage).asLeft))
 
             response.right().apply {
-              case httpResponse if httpResponse.getCode == HttpURLConnection.HTTP_OK =>
+              httpResponse =>
                 callback(HttpResponse(
                   httpResponse.getCode,
                   httpResponse.getHttpVersion,
@@ -78,12 +78,6 @@ class NetgymHttpClient[F[_] : Async : FlatMap](
                   httpResponse.getContent,
                   Option(httpResponse.getCharset)
                 ).asRight)
-
-              case httpResponse =>
-                val content = new String(httpResponse.getContent,
-                  Option(httpResponse.getCharset).getOrElse(StandardCharsets.UTF_8))
-
-                callback(Left(new RuntimeException(s"The server responded with code: ${httpResponse.getCode}\n$content")))
             }
           }
         })
