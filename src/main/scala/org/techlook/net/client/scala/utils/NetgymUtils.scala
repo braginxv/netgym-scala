@@ -31,7 +31,6 @@ import cats.syntax.option._
 import cats.{ Applicative, ApplicativeError, Monad, MonadError }
 import org.techlook.net.client.http.Pair
 
-import java.util.regex.Pattern
 import scala.collection.Factory
 import scala.jdk.CollectionConverters._
 
@@ -58,8 +57,7 @@ object NetgymUtils {
         val listOfUrls = urls.toList
 
         val baseUrlMatch = Monad[F].tailRecM(listOfUrls.head -> listOfUrls.tail) {
-          case (baseUrl, head :: tail) => Some(serverPart.matcher(head))
-            .filter(_.find())
+          case (baseUrl, head :: tail) => serverPart.findFirstIn(head)
             .map { _ =>
               baseUrl
                 .zip(head)
@@ -80,17 +78,16 @@ object NetgymUtils {
           .map { baseUrl =>
             Some(baseUrl)
               .filter { url =>
-                val matcher = serverPart.matcher(url)
-                matcher.find() && listOfUrls.head == matcher.group(1)
+                serverPart.findFirstIn(url).exists(listOfUrls.headOption.contains)
               }
               .map(_ + '/')
               .getOrElse(baseUrl.take(baseUrl.lastIndexOf('/') + 1))
           }
-          .filterNot(protocolOnly.matcher(_).matches())
+          .filterNot(protocolOnly.matches)
           .value
     }
   }
 
-  private lazy val protocolOnly: Pattern = Pattern.compile("^\\w+://$")
-  private lazy val serverPart: Pattern = Pattern.compile("(^\\w+://[^/]+)")
+  private lazy val protocolOnly = "^\\w+://$".r
+  private lazy val serverPart = "^\\w+://[^/]+".r
 }
