@@ -35,6 +35,13 @@ For instance, let's say you need to download a set of images from a remote serve
         .iterable(imagePaths)
         .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
         .through(httpClient.acquire)
+        .evalTap { case (key, response) =>
+          Some(response).filterNot(_.code == HttpURLConnection.HTTP_OK).traverse { response =>
+            IO.println(
+              s"""Download "$key" is completed with code: ${response.code}. No content for further processing""")
+          }
+        }
+        .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
         .through(NetgymHttpClient.toByteResponses)
 
       (fileName, content) = response
@@ -72,6 +79,13 @@ val program: Stream[Task, Unit] = for {
     .iterable(imagePaths)
     .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
     .through(httpClient.acquire)
+    .evalTap { case (key, response) =>
+        Some(response).filterNot(_.code == HttpURLConnection.HTTP_OK).traverse { response =>
+          Console.printError(
+            s"""Download "$key" is completed with code: ${response.code}. No content for further processing""")
+        }
+    }
+    .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
     .through(NetgymHttpClient.toByteResponses)
 
   (fileName, content) = response
@@ -86,7 +100,7 @@ program.compile.drain
 
 ### Other stream convertors
 
-There are other convertors allowing you to get http responses in a more appropriate form you may need
+There are other convertors allowing you to get http responses in a more appropriate form you might need
 
 ```scala
 NetgymHttpClient.toByteResponses[F, KeyType] // returns Pipe[F, (KeyType, HttpResponse), (KeyType, Array[Byte])]
