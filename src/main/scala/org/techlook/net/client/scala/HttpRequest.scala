@@ -98,7 +98,7 @@ case class CONNECT(
   }
 }
 
-case class PUT[T](
+case class PUT[+T](
   path: String,
   body: T,
   contentType: String,
@@ -111,7 +111,7 @@ case class PUT[T](
   }
 }
 
-case class DELETE[T](
+case class DELETE[+T](
   path: String,
   body: T,
   contentType: String,
@@ -124,7 +124,7 @@ case class DELETE[T](
   }
 }
 
-case class PATCH[T](
+case class PATCH[+T](
   path: String,
   body: T,
   contentType: String,
@@ -137,7 +137,7 @@ case class PATCH[T](
   }
 }
 
-case class POST[T](
+case class POST[+T](
   path: String,
   body: T,
   contentType: String,

@@ -28,7 +28,7 @@ import org.techlook.net.client.http.FormRequestData
 
 import java.nio.charset.{ Charset, StandardCharsets }
 
-case class FormEntry[T](name: String,
+case class FormEntry[+T](name: String,
   body: T,
   contentType: String,
   charset: Charset = StandardCharsets.UTF_8,
