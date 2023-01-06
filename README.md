@@ -21,40 +21,37 @@ The wrappers in this library suggest asynchronous network operations using Cats 
 For instance, let's say you need to download a set of images from a remote server and save them in local storage. To do this you could write:
 
 ```scala
-    val program = for {
-      mayBeBaseUrl <- Stream.eval(NetgymUtils.baseUrlFor[IO](urls))
+  val baseUrl = NetgymUtils.baseUrlFor[Task](urls).getOrElse(...)
+  val httpClient = NetgymHttpClient[IO](baseUrl)
 
-      baseUrl <- Stream.eval {
-        IO.fromOption(mayBeBaseUrl)(new IllegalStateException("Images to be downloaded reside on different hosts"))
-      }
-
-      imagePaths = urls.map(_.replace(baseUrl, ""))
-      httpClient = new NetgymHttpClient[IO](new URL(baseUrl))
-
-      response <- Stream
-        .iterable(imagePaths)
-        .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
-        .through(httpClient.acquire)
-        .evalTap { case (key, response) =>
-          Some(response).filterNot(_.code == HttpURLConnection.HTTP_OK).traverse { response =>
-            IO.println(
-              s"""Download "$key" is completed with code: ${response.code}. No content for further processing""")
-          }
+  val program = for {
+    (fileName, content) <- Stream
+      .iterable(imagePaths)
+      .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
+      .through(httpClient.acquire)
+      .evalTap { case (key, response) =>
+        Some(response).filterNot(_.code == HttpURLConnection.HTTP_OK).traverse { response =>
+          IO.println(
+            s"""Downloading of "$key" is completed with code: ${response.code}. No image to save""")
         }
-        .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
-        .through(NetgymHttpClient.toByteResponses)
+      }
+      .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
+      .through(NetgymHttpClient.toByteResponses)
 
-      (fileName, content) = response
+    _ <- Stream
+      .chunk(Chunk.array(content))
+      .through(Files[IO].writeAll(Path(s"$outputDirectory/$fileName")))
+  } yield ()
 
-      _ <- Stream
-        .chunk(Chunk.array(content))
-        .through(Files[IO].writeAll(Path(s"$outputDirectory/$fileName")))
-    } yield ()
-
-    program.compile.drain
+  program.compile.drain.timed.flatMap { case (time, _) =>
+    IO.println(s"elapsed time: ${time.toMillis} ms")
+  } *> IO.blocking {
+    ClientSystem.client().shutdown()
+    ClientSystem.client().awaitTerminating()
+  }
 ```
 
-You could also use ZIO (https://github.com/zio/zio) effect-system to perform http-requests. For this you should add to project ZIO's cats-interop (https://github.com/zio/interop-cats)
+You could also use ZIO (https://github.com/zio/zio) effect-system to perform http-requests. For this you should add to project interop-cats (https://github.com/zio/interop-cats)
 ```sbt
 libraryDependencies += "dev.zio" %% "zio-interop-cats" % "3.3.0"
 ```
@@ -64,38 +61,34 @@ and use zio.Task or other ZIO's effects instead of cats.effect.IO:
 import zio._
 import zio.interop.catz._
 
-val program: Stream[Task, Unit] = for {
-  mayBeBaseUrl <- Stream.eval(NetgymUtils.baseUrlFor[Task](urls))
-
-  baseUrl <- Stream.eval[Task, String] {
-    ZIO.fromOption(mayBeBaseUrl)
-      .mapError(_ => new IllegalStateException("Images to be downloaded reside on different hosts"))
-  }
-
-  imagePaths = urls.map(_.replace(baseUrl, ""))
-  httpClient = new NetgymHttpClient[Task](new URL(baseUrl))
-
-  response <- Stream
-    .iterable(imagePaths)
-    .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
-    .through(httpClient.acquire)
-    .evalTap { case (key, response) =>
+  val baseUrl = NetgymUtils.baseUrlFor[Task](urls).getOrElse(...)
+  val httpClient = NetgymHttpClient[Task](baseUrl)
+    
+  val program = for {
+    (fileName, content) <- Stream
+      .iterable(imagePaths)
+      .map(path => path.replaceFirst(".*?(?=[^/]+$)", "") -> GET(path))
+      .through(httpClient.acquire)
+      .evalTap { case (key, response) =>
         Some(response).filterNot(_.code == HttpURLConnection.HTTP_OK).traverse { response =>
           Console.printError(
-            s"""Download "$key" is completed with code: ${response.code}. No content for further processing""")
+            s"""Downloading of "$key" is completed with code: ${response.code}. No image to save""")
         }
-    }
-    .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
-    .through(NetgymHttpClient.toByteResponses)
-
-  (fileName, content) = response
-
-  _ <- Stream
-    .chunk(fs2.Chunk.array(content))
-    .through(Files[Task].writeAll(Path(s"$outputDirectory/$fileName")))
-} yield ()
-
-program.compile.drain
+      }
+      .filter { case (_, response) => response.code == HttpURLConnection.HTTP_OK }
+      .through(NetgymHttpClient.toByteResponses)
+    
+    _ <- Stream
+      .chunk(fs2.Chunk.array(content))
+      .through(Files[Task].writeAll(Path(s"$outputDirectory/$fileName")))
+  } yield ()
+    
+  program.compile.drain.timed.flatMap { case (time, _) =>
+    Console.printLine(s"elapsed time: ${time.toMillis} ms")
+  } *> ZIO.attemptBlocking {
+    ClientSystem.client().shutdown()
+    ClientSystem.client().awaitTerminating()
+  }
 ```
 
 ### Other stream convertors
