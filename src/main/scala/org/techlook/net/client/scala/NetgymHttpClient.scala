@@ -26,11 +26,10 @@ package org.techlook.net.client.scala
 
 import cats.effect.Async
 import cats.syntax.either._
-import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.monadError._
-import cats.{ ApplicativeError, FlatMap, Functor, MonadError }
-import fs2._
+import cats.{ ApplicativeError, Functor, MonadError }
+import fs2.Pipe
 import io.circe
 import io.circe.parser._
 import io.circe.{ Decoder, Json, ParsingFailure }
@@ -39,30 +38,28 @@ import org.techlook.net.client.http._
 import org.techlook.net.client.http.adapters.{ ByteResponseListener, Response }
 import org.techlook.net.client.scala.utils.NetgymUtils
 
-import java.net.{ HttpURLConnection, URL }
+import java.net.URL
 import java.nio.charset.StandardCharsets
 import javax.net.ssl.{ KeyManager, TrustManager }
 
-class NetgymHttpClient[F[_] : Async : FlatMap](
+class NetgymHttpClient[F[_] : Async](
   baseUrl: URL,
   basicHeaders: Map[String, String] = Map.empty,
   clientKeyManagers: Iterable[KeyManager] = Iterable.empty,
   trustManagers: Iterable[TrustManager] = Iterable.empty,
-  connectionLifetime: ConnectionLifetime = Pipelining,
+  connectionLifetime: ConnectionLifetime = Closable,
   pipelineConnectionSendingInterval: Long = PipeliningConnection.DEFAULT_SENDING_INTERVAL
 ) {
 
   import NetgymHttpClient._
 
-  private val connectionF = Async[F].delay(fromBaseUrl(baseUrl))
+  private lazy val connection = fromBaseUrl(baseUrl)
 
   private val headers = basicHeaders + (AGENT_HEADER -> AGENT_CLIENT)
   private val basePath = Some(baseUrl.getPath).filterNot(_.endsWith("/")).map(_ + '/').getOrElse(baseUrl.getPath)
 
   def acquire(request: HttpRequest): F[HttpResponse] = {
     for {
-      connection <- connectionF
-
       response <- Async[F].async_ { callback: (Either[Throwable, HttpResponse] => Unit) =>
         request.request(connection, basePath, headers, new ByteResponseListener {
           override def respond(response: org.techlook.net.client.Either[String, Response]): Unit = {
@@ -115,6 +112,16 @@ object NetgymHttpClient {
   final val HTTPS: String = "https"
   final val AGENT_HEADER: String = "User-Agent"
   final val AGENT_CLIENT: String = "Netgym network library (https://github.com/braginxv/netgym)"
+
+  def apply[F[_] : Async](
+    baseUrl: URL,
+    basicHeaders: Map[String, String] = Map.empty,
+    clientKeyManagers: Iterable[KeyManager] = Iterable.empty,
+    trustManagers: Iterable[TrustManager] = Iterable.empty,
+    connectionLifetime: ConnectionLifetime = Pipelining,
+    pipelineConnectionSendingInterval: Long = PipeliningConnection.DEFAULT_SENDING_INTERVAL
+  ) = new NetgymHttpClient[F](baseUrl, basicHeaders, clientKeyManagers, trustManagers,
+    connectionLifetime, pipelineConnectionSendingInterval)
 
   def toByteResponses[F[_], K]: Pipe[F, (K, HttpResponse), (K, Array[Byte])] = _
     .map { case (key, response) => key -> response.content }
