@@ -47,7 +47,7 @@ class NetgymHttpClient[F[_] : Async](
   basicHeaders: Map[String, String] = Map.empty,
   clientKeyManagers: Iterable[KeyManager] = Iterable.empty,
   trustManagers: Iterable[TrustManager] = Iterable.empty,
-  connectionLifetime: ConnectionLifetime = Pipelining,
+  connectionLifetime: ConnectionLifetime = Closable,
   pipelineConnectionSendingInterval: Long = PipeliningConnection.DEFAULT_SENDING_INTERVAL
 ) {
 
